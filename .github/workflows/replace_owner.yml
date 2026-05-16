@@ -1,0 +1,56 @@
+name: 自动替换仓库用户名
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 1'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Clash/config/**.ini'
+
+permissions:
+  contents: write
+
+jobs:
+  replace-owner:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码仓库
+        uses: actions/checkout@v4
+
+      - name: 替换 cmliu 为当前仓库用户名
+        run: |
+          REPO_OWNER="${{ github.repository_owner }}"
+          REPO_NAME="${{ github.event.repository.name }}"
+          echo "当前仓库所有者: $REPO_OWNER"
+          echo "当前仓库名称: $REPO_NAME"
+
+          if [ "$REPO_OWNER" = "cmliu" ]; then
+            echo "当前仓库所有者即为 cmliu，无需替换"
+            exit 0
+          fi
+
+          echo "开始替换 Clash/config 目录下所有 .ini 文件中的 cmliu/ACL4SSR ..."
+          find Clash/config -name "*.ini" -type f | while read -r file; do
+            sed -i "s|cmliu/ACL4SSR|$REPO_OWNER/$REPO_NAME|g" "$file"
+            echo "已处理: $file"
+          done
+
+          echo "替换完成"
+
+      - name: 提交更改
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git diff --quiet; then
+            echo "没有文件变化，跳过提交"
+          else
+            git add Clash/config/
+            git commit -m "🔄 自动替换 cmliu/ACL4SSR 为 ${{ github.repository_owner }}/${{ github.event.repository.name }} [skip ci]"
+            git push
+            echo "提交完成"
+          fi
